@@ -1,2 +1,12 @@
+# Automatically normalize line endings for text files
+* text=auto
+
+# Explicitly define the line endings for specific file types
 *.go text eol=lf
 *.json text eol=lf
+*.md text eol=lf
+
+# If you have images, ensure they’re binary files and don't change line endings
+*.jpg binary
+*.png binary
+*.gif binary
