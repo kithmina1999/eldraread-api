@@ -78,5 +78,18 @@ func RegisterWithGoogle(c *fiber.Ctx)error{
 	}
 
 	//fetch user info
-	
+	user, err := authClient.GetUser(c.Context(),token.UID)
+	if err != nil{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":"could not fetch user",
+		})
+	} 
+	return c.JSON(fiber.Map{
+		"message":"Google login success",
+		"user":fiber.Map{
+			"uid":user.UID,
+			"email":user.Email,
+			"username":user.DisplayName,
+		},
+	})
 }

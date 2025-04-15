@@ -8,4 +8,5 @@ import(
 func RegisterUserRoutes(app *fiber.App){
 	api := app.Group("/api/users")
 	api.Post("/register",controllers.RegisterUser)
+	api.Post("/register/google",controllers.RegisterWithGoogle)
 }
