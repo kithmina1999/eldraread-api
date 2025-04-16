@@ -7,11 +7,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/kithmina1999/eldraread-api/config"
 	"github.com/kithmina1999/eldraread-api/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func RegisterUser(c *fiber.Ctx) error {
@@ -34,6 +36,18 @@ func RegisterUser(c *fiber.Ctx) error {
 			"error": "Invalid email, password, or username",
 		})
 	}
+	password := data.Password
+
+	//check if the apssword is encrypted
+	if !strings.HasPrefix(password,"$2a$") && !strings.HasPrefix(password, "$2b$") && !strings.HasPrefix(password, "$2y$") {
+		hashedPassword,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)
+		if err != nil{
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error":"Could not encrypt password",
+			})
+		}
+		password = string(hashedPassword)
+	}
 
 	authClient, err := config.FirebaseAuth()
 	if err != nil {
@@ -42,7 +56,7 @@ func RegisterUser(c *fiber.Ctx) error {
 		})
 	}
 
-	params := (&auth.UserToCreate{}).Email(data.Email).Password(data.Password).DisplayName(data.Username)
+	params := (&auth.UserToCreate{}).Email(data.Email).Password(password).DisplayName(data.Username)
 
 	userRecord, err := authClient.CreateUser(c.Context(), params)
 	if err != nil {
