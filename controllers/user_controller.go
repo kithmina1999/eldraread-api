@@ -37,59 +37,72 @@ func RegisterUser(c *fiber.Ctx) error {
 
 	params := (&auth.UserToCreate{}).Email(data.Email).Password(data.Password).DisplayName(data.Username)
 
-	userRecord,err:= authClient.CreateUser(c.Context(),params)
-	if err != nil{
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"Error":err.Error(),
+	userRecord, err := authClient.CreateUser(c.Context(), params)
+	if err != nil {
+		if auth.IsEmailAlreadyExists(err) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Email is already registered",
 			})
+		}
+
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": err.Error(),
+		})
 	}
-	
+
 	return c.JSON(fiber.Map{
-		"message":"User registered successfully",
-		"uid":userRecord.UID,
+		"message": "User registered successfully",
+		"uid":     userRecord.UID,
 	})
 }
 
-func RegisterWithGoogle(c *fiber.Ctx)error{
-	type GoogleInput struct{
+func RegisterWithGoogle(c *fiber.Ctx) error {
+	type GoogleInput struct {
 		IdToken string `json:"idToken"`
 	}
 
 	var input GoogleInput
-	if err:= c.BodyParser(&input); err != nil{
+	if err := c.BodyParser(&input); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"Error":"Invalid request",
+			"error": "Invalid request",
 		})
 	}
 
-	authClient,err:= config.FirebaseAuth()
-	if err != nil{
+	authClient, err := config.FirebaseAuth()
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":"Auth error",
+			"error": "Auth error",
 		})
 	}
 
 	// verfiy google token
-	token,err := authClient.VerifyIDToken(c.Context(),input.IdToken)
-	if err != nil{
+	token, err := authClient.VerifyIDToken(c.Context(), input.IdToken)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"Error":"Invalid token",
+			"error": "Invalid token",
 		})
 	}
 
 	//fetch user info
-	user, err := authClient.GetUser(c.Context(),token.UID)
-	if err != nil{
+	user, err := authClient.GetUser(c.Context(), token.UID)
+	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-			"error":"could not fetch user",
+			"error": "could not fetch user",
 		})
-	} 
+	}
+
+	if !user.EmailVerified{
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error": "Google account email is not verified",
+		})
+	}
+
 	return c.JSON(fiber.Map{
-		"message":"Google login success",
-		"user":fiber.Map{
-			"uid":user.UID,
-			"email":user.Email,
-			"username":user.DisplayName,
+		"message": "Google login success",
+		"user": fiber.Map{
+			"uid":      user.UID,
+			"email":    user.Email,
+			"username": user.DisplayName,
 		},
 	})
 }
