@@ -4,16 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
-	"strings"
 
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/kithmina1999/eldraread-api/config"
 	"github.com/kithmina1999/eldraread-api/utils"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func RegisterUser(c *fiber.Ctx) error {
@@ -36,18 +34,6 @@ func RegisterUser(c *fiber.Ctx) error {
 			"error": "Invalid email, password, or username",
 		})
 	}
-	password := data.Password
-
-	//check if the apssword is encrypted
-	if !strings.HasPrefix(password,"$2a$") && !strings.HasPrefix(password, "$2b$") && !strings.HasPrefix(password, "$2y$") {
-		hashedPassword,err:=bcrypt.GenerateFromPassword([]byte(password),bcrypt.DefaultCost)
-		if err != nil{
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-				"error":"Could not encrypt password",
-			})
-		}
-		password = string(hashedPassword)
-	}
 
 	authClient, err := config.FirebaseAuth()
 	if err != nil {
@@ -56,7 +42,7 @@ func RegisterUser(c *fiber.Ctx) error {
 		})
 	}
 
-	params := (&auth.UserToCreate{}).Email(data.Email).Password(password).DisplayName(data.Username)
+	params := (&auth.UserToCreate{}).Email(data.Email).Password(data.Password).DisplayName(data.Username)
 
 	userRecord, err := authClient.CreateUser(c.Context(), params)
 	if err != nil {
@@ -148,7 +134,7 @@ func LoginUser(c *fiber.Ctx)error {
 		"returnSecureToken": "true",
 	}
 	jsonPayload,_:=json.Marshal(payload)
-
+	
 	apiKey := os.Getenv("FIREBASE_WEB_API_KEY")
 	if apiKey == "" {
 		return c.Status(500).JSON(fiber.Map{
@@ -158,8 +144,8 @@ func LoginUser(c *fiber.Ctx)error {
 	url:= fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=%s", apiKey)
 
 	resp,err:=http.Post(url,"application/json",bytes.NewBuffer(jsonPayload))
-	if err != nil || resp.StatusCode != 200 {
-		body,_:=ioutil.ReadAll(resp.Body)
+	if err != nil || resp.StatusCode != 200 {	
+		body,_:=io.ReadAll(resp.Body)
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
 			"error":"Invalid email or password",
 			"debug":string(body),
