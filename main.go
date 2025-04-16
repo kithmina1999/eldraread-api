@@ -4,9 +4,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/kithmina1999/eldraread-api/routes"
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	godotenv.Load()
 	app := fiber.New()
 
 	app.Use(cors.New(cors.Config{

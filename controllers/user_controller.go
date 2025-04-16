@@ -1,6 +1,13 @@
 package controllers
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/kithmina1999/eldraread-api/config"
@@ -103,6 +110,60 @@ func RegisterWithGoogle(c *fiber.Ctx) error {
 			"uid":      user.UID,
 			"email":    user.Email,
 			"username": user.DisplayName,
+		},
+	})
+}
+
+func LoginUser(c *fiber.Ctx)error {
+	type LoginInput struct{
+		Email string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	var input LoginInput
+	if err:=c.BodyParser(&input); err != nil{
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error":"Invalid request",
+		})
+	}
+
+	//firebase api req
+	payload := map[string]string{
+		"email":             input.Email,
+		"password":          input.Password,
+		"returnSecureToken": "true",
+	}
+	jsonPayload,_:=json.Marshal(payload)
+
+	apiKey := os.Getenv("FIREBASE_WEB_API_KEY")
+	if apiKey == "" {
+		return c.Status(500).JSON(fiber.Map{
+			"error": "API key not configured",
+		})
+	}
+	url:= fmt.Sprintf("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=%s", apiKey)
+
+	resp,err:=http.Post(url,"application/json",bytes.NewBuffer(jsonPayload))
+	if err != nil || resp.StatusCode != 200 {
+		body,_:=ioutil.ReadAll(resp.Body)
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{
+			"error":"Invalid email or password",
+			"debug":string(body),
+		})
+	}
+	defer resp.Body.Close()
+
+	//parse fireabse response
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	return c.JSON(fiber.Map{
+		"message":"Login successful",
+		"idToken":result["idToken"],
+		"user":fiber.Map{
+			"email":    result["email"],
+			"localId":  result["localId"],
+			"displayName": result["displayName"],
 		},
 	})
 }
