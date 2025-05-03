@@ -11,3 +11,10 @@ func RegisterUserRoutes(app *fiber.App){
 	api.Post("/register/google",controllers.RegisterWithGoogle)
 	api.Post("/login",controllers.LoginUser)
 }
+
+// func RegisteredUserRoutes(app *fiber.App){
+// 	api := app.Group("/api/users")
+// 	api.Get("/profile")
+// 	api.Get("/library")
+// 	api.Get("/history")
+// }
