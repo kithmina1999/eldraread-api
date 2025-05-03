@@ -7,10 +7,13 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"firebase.google.com/go/auth"
 	"github.com/gofiber/fiber/v2"
 	"github.com/kithmina1999/eldraread-api/config"
+	"github.com/kithmina1999/eldraread-api/db"
+	"github.com/kithmina1999/eldraread-api/models"
 	"github.com/kithmina1999/eldraread-api/utils"
 )
 
@@ -54,6 +57,21 @@ func RegisterUser(c *fiber.Ctx) error {
 
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": err.Error(),
+		})
+	}
+
+	//save data in postgres
+	newUser := models.User{
+		UID:userRecord.UID,
+		Email: userRecord.Email,
+		Username: userRecord.DisplayName,
+		Status: models.StatusActive,
+		Role:models.RoleUser,
+	}
+
+	if err:= db.DB.Create(&newUser).Error; err != nil{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":"Failed to save user in database",
 		})
 	}
 
@@ -156,6 +174,15 @@ func LoginUser(c *fiber.Ctx)error {
 	//parse fireabse response
 	var result map[string]interface{}
 	json.NewDecoder(resp.Body).Decode(&result)
+
+	c.Cookie(&fiber.Cookie{
+		Name:     "session_token",
+		Value:    result["idToken"].(string),
+		Expires:  time.Now().Add(24 * time.Hour),
+		HTTPOnly: true,
+		Secure:   false, // set true in prod w/ HTTPS
+		SameSite: "Lax",
+	})
 
 	return c.JSON(fiber.Map{
 		"message":"Login successful",
