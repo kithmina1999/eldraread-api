@@ -55,7 +55,7 @@ func AdminLogin(c *fiber.Ctx) error {
 
 	//parse firebase response
 	var result map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+	if decodeErr := json.NewDecoder(resp.Body).Decode(&result); decodeErr != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
 			"error": "Failed to parse Firebase response",
 		})
