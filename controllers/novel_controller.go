@@ -1,9 +1,14 @@
 package controllers
 
 import (
+	"context"
+	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/kithmina1999/eldraread-api/config"
 	"github.com/kithmina1999/eldraread-api/db"
 	"github.com/kithmina1999/eldraread-api/models"
 )
@@ -112,6 +117,28 @@ func ViewTag(c *fiber.Ctx) error {
 	})
 }
 
+func DeleteTag(c *fiber.Ctx) error {
+	id := c.Params("id")
+
+	//check if the tag exists
+	var tag models.Tags
+	if err := db.DB.First(&tag, id).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Tag not found",
+		})
+	}
+
+	//delete tag
+	if err := db.DB.Delete(&tag).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to delete tag",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"messsage": "Tag deleted successfully",
+	})
+}
+
 func AddAuthor(c *fiber.Ctx) error {
 	type AuthorInput struct {
 		Name string `json:"name"`
@@ -158,4 +185,72 @@ func AddAuthor(c *fiber.Ctx) error {
 		"author":  author,
 	})
 
+}
+
+func ViewAuthor(c *fiber.Ctx) error {
+	var authors []models.Author
+
+	if err := db.DB.Order("name ASC").Find(&authors).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch authors form db",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"authors": authors,
+	})
+}
+
+func UploadCoverImage(c *fiber.Ctx) error {
+	//get the uploaded file
+	fileHeader, err := c.FormFile("image")
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Failed to get file",
+		})
+	}
+
+	//open the uploaded file
+	file, err := fileHeader.Open()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to open file",
+		})
+	}
+	defer file.Close()
+
+	//get firebase storage bucket
+	bucket, err := config.FirebaseStorage()
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to get firebase storage",
+		})
+	}
+
+	//generate unique filename
+	filename := fmt.Sprintf("covers/%d_%s", time.Now().Unix(), fileHeader.Filename)
+
+	//upload to bucket
+	ctx := context.Background()
+	writer := bucket.Object(filename).NewWriter(ctx)
+	writer.ContentType = fileHeader.Header.Get("Content-Type")
+
+	if _, err := io.Copy(writer, file); err != nil {
+		writer.Close()
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to upload",
+		})
+	}
+	if err := writer.Close(); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to close writer",
+		})
+	}
+	// 6. Construct public URL (optional: adjust if you use signed URLs)
+	publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", "eldraread.firebasestorage.app", filename)
+
+	return c.JSON(fiber.Map{
+		"message":   "Upload successful",
+		"file_name": filename,
+		"url":       publicURL,
+	})
 }
