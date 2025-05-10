@@ -246,7 +246,10 @@ func UploadCoverImage(c *fiber.Ctx) error {
 		})
 	}
 	// 6. Construct public URL (optional: adjust if you use signed URLs)
-	publicURL := fmt.Sprintf("https://storage.googleapis.com/%s/%s", "eldraread.firebasestorage.app", filename)
+	publicURL := fmt.Sprintf(
+		"https://firebasestorage.googleapis.com/v0/b/eldraread.firebasestorage.app/o/%s?alt=media",
+		strings.ReplaceAll(filename, "/", "%2F"),
+	)
 
 	return c.JSON(fiber.Map{
 		"message":   "Upload successful",
