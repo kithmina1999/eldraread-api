@@ -367,3 +367,118 @@ func ViewNovels(c *fiber.Ctx) error {
 		"novels": novels,
 	})
 }
+
+func UpdateNovel(c *fiber.Ctx) error {
+
+	slug := c.Params("slug")
+
+	var novel models.Novel
+
+	if err := db.DB.Preload("Authors").Preload("Genres").Preload("Tags").Where("slug =?", slug).First(&novel).Error; err != nil {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{
+			"error": "Novel not found",
+		})
+	}
+	//parse request body
+	type UpdateNovelInput struct {
+		Title         *string `json:"title"`
+		Summary       *string `json:"summary"`
+		Language      *string `json:"language"`
+		CoverImage    *string `json:"coverImage"`
+		AuthorIds     *[]uint `json:"authorIds"`
+		GenreIds      *[]uint `json:"genreIds"`
+		TagIds        *[]uint `json:"tagIds"`
+		PublishedDate *string `json:"publishedDate"`
+		PageCount     *int    `json:"pageCount"`
+		Status        *string `json:"status"`
+		Slug          *string `json:"slug"`
+	}
+
+	var input UpdateNovelInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot parse JSON",
+		})
+	}
+	//update fields if provided
+	if input.Title != nil {
+		novel.Title = *input.Title
+	}
+	if input.Summary != nil {
+		novel.Summary = *input.Summary
+	}
+	if input.Language != nil {
+		novel.Language = *input.Language
+	}
+	if input.CoverImage != nil {
+		novel.CoverImageURL = *input.CoverImage
+	}
+	if input.PageCount != nil {
+		novel.PageCount = *input.PageCount
+	}
+	if input.Status != nil {
+		novel.Status = *input.Status
+	}
+	if input.Slug != nil && *input.Slug != "" {
+		novel.Slug = *input.Slug
+	}
+	if input.PublishedDate != nil && *input.PublishedDate != "" {
+		publishedDate, err := time.Parse(time.RFC3339, *input.PublishedDate)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid published date format",
+			})
+		}
+		novel.PublishedDate = publishedDate
+	}
+	// Update associations if provided
+	if input.AuthorIds != nil {
+		var authors []models.Author
+		if err := db.DB.Find(&authors, *input.AuthorIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch authors",
+			})
+		}
+		if err := db.DB.Model(&novel).Association("Authors").Replace(authors); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update authors",
+			})
+		}
+	}
+	if input.GenreIds != nil {
+		var genres []models.Genre
+		if err := db.DB.Find(&genres, *input.GenreIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch genres",
+			})
+		}
+		if err := db.DB.Model(&novel).Association("Genres").Replace(genres); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update genres",
+			})
+		}
+	}
+	if input.TagIds != nil {
+		var tags []models.Tags
+		if err := db.DB.Find(&tags, *input.TagIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch tags",
+			})
+		}
+		if err := db.DB.Model(&novel).Association("Tags").Replace(tags); err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to update tags",
+			})
+		}
+	}
+	//save update novel 
+	if err:= db.DB.Save(&novel).Error; err!=nil{
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to update novel",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Novel updated successfully",
+		"novel":   novel,
+	})
+}
