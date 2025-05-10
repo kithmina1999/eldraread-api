@@ -257,3 +257,113 @@ func UploadCoverImage(c *fiber.Ctx) error {
 		"url":       publicURL,
 	})
 }
+
+func AddNovel(c *fiber.Ctx) error {
+	//expectedd body structure
+	type NovelInput struct {
+		Title         string `json:"title"`
+		Summary       string `json:"summary"`
+		Language      string `json:"language"`
+		CoverImage    string `json:"coverImage"`
+		AuthorIds     []uint `json:"authorIds"`
+		GenreIds      []uint `json:"genreIds"`
+		TagIds        []uint `json:"tagIds"`
+		PublishedDate string `json:"publishedDate"` // optional, ISO8601 string
+		PageCount     int    `json:"pageCount"`     // optional
+		Status        string `json:"status"`        // optional
+		Slug          string `json:"slug"`          // optional, can be generated
+	}
+
+	var input NovelInput
+	if err := c.BodyParser(&input); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Cannot parse JSON",
+		})
+	}
+	//validate required fields
+	if strings.TrimSpace(input.Title) == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Title is required",
+		})
+	}
+	//generate slug if not provided
+	slug := input.Slug
+	if slug == "" {
+		slug = strings.ToLower(strings.ReplaceAll(input.Title, " ", "-"))
+	}
+
+	//parse published date if provided
+	var publishedDate time.Time
+	if input.PublishedDate != "" {
+		var err error
+		publishedDate, err = time.Parse(time.RFC3339, input.PublishedDate)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+				"error": "Invalid published date format",
+			})
+		}
+	}
+
+	//fetch authors, genres, and tags
+	var authors []models.Author
+	if len(input.AuthorIds) > 0 {
+		if err := db.DB.Find(&authors, input.AuthorIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch authors",
+			})
+		}
+	}
+	var genres []models.Genre
+	if len(input.GenreIds) > 0 {
+		if err := db.DB.Find(&genres, input.GenreIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch genres",
+			})
+		}
+	}
+	var tags []models.Tags
+	if len(input.TagIds) > 0 {
+		if err := db.DB.Find(&tags, input.TagIds).Error; err != nil {
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Failed to fetch tags",
+			})
+		}
+	}
+	//create novel
+	novel := models.Novel{
+		Title:         input.Title,
+		Slug:          slug,
+		Summary:       input.Summary,
+		PublishedDate: publishedDate,
+		PageCount:     input.PageCount,
+		Language:      input.Language,
+		Status:        input.Status,
+		CoverImageURL: input.CoverImage,
+		Authors:       authors,
+		Genres:        genres,
+		Tags:          tags,
+	}
+
+	if err := db.DB.Create(&novel).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to add novel to db",
+		})
+	}
+
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"message": "Novel added successfully",
+		"novel":   novel,
+	})
+}
+
+func ViewNovels(c *fiber.Ctx) error {
+	var novels []models.Novel
+	if err := db.DB.Preload("Authors").Preload("Genres").Preload("Tags").Find(&novels).Error; err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": "Failed to fetch novels from db",
+		})
+	}
+	return c.Status(fiber.StatusOK).JSON(fiber.Map{
+		"novels": novels,
+	})
+}

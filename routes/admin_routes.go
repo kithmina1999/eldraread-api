@@ -23,4 +23,6 @@ func AdminRoutes(app *fiber.App){
 	api.Get("/novels/authors",controllers.ViewAuthor)
 	api.Delete("/novels/tags/:id",controllers.DeleteTag)
 	api.Post("/novels/upload-image",controllers.UploadCoverImage)
+	api.Post("/novels/add-novel",controllers.AddNovel)
+	api.Get("/novels",controllers.ViewNovels)
 }
